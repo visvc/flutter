@@ -677,38 +677,75 @@ class FlutterPlugin implements Plugin<Project> {
                 return
             }
             // Flutter module included as a subproject in add to app.
-            Project appProject = project.rootProject.findProject(':app')
-            assert appProject != null
-            appProject.afterEvaluate {
-                assert appProject.android != null
-                appProject.android.applicationVariants.all { appProjectVariant ->
-                    // Find a compatible application variant in the host app.
-                    //
-                    // For example, consider a host app that defines the following variants:
-                    // | ----------------- | ----------------------------- |
-                    // |   Build Variant   |   Flutter Equivalent Variant  |
-                    // | ----------------- | ----------------------------- |
-                    // |   freeRelease     |   relese                      |
-                    // |   freeDebug       |   debug                       |
-                    // |   freeDevelop     |   debug                       |
-                    // |   profile         |   profile                     |
-                    // | ----------------- | ----------------------------- |
-                    //
-                    // This mapping is based on the following rules:
-                    // 1. If the host app build variant name is `profile` then the equivalent
-                    //    Flutter variant is `profile`.
-                    // 2. If the host app build variant is debuggable
-                    //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
-                    //    variant is `debug`.
-                    // 3. Otherwise, the equivalent Flutter variant is `release`.
-                    if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                        return
+            Project appProject = project.rootProject.findProject(':appClient')
+            Project appProject2 = project.rootProject.findProject(':appDriver')
+            Project appProject3 = project.rootProject.findProject(':app')
+
+            assert (appProject != null || appProject2 != null || appProject3 != null)
+
+            if (appProject != null) {
+                appProject.afterEvaluate {
+                    assert appProject.android != null
+                    appProject.android.applicationVariants.all { appProjectVariant ->
+                        // Find a compatible application variant in the host app.
+                        //
+                        // For example, consider a host app that defines the following variants:
+                        // | ----------------- | ----------------------------- |
+                        // |   Build Variant   |   Flutter Equivalent Variant  |
+                        // | ----------------- | ----------------------------- |
+                        // |   freeRelease     |   relese                      |
+                        // |   freeDebug       |   debug                       |
+                        // |   freeDevelop     |   debug                       |
+                        // |   profile         |   profile                     |
+                        // | ----------------- | ----------------------------- |
+                        //
+                        // This mapping is based on the following rules:
+                        // 1. If the host app build variant name is `profile` then the equivalent
+                        //    Flutter variant is `profile`.
+                        // 2. If the host app build variant is debuggable
+                        //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
+                        //    variant is `debug`.
+                        // 3. Otherwise, the equivalent Flutter variant is `release`.
+                        if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                            return
+                        }
+                        Task mergeAssets = project
+                                .tasks
+                                .findByPath(":appClient:merge${appProjectVariant.name.capitalize()}Assets")
+                        assert mergeAssets
+                        mergeAssets.dependsOn(copyFlutterAssetsTask)
                     }
-                    Task mergeAssets = project
-                        .tasks
-                        .findByPath(":app:merge${appProjectVariant.name.capitalize()}Assets")
-                    assert mergeAssets
-                    mergeAssets.dependsOn(copyFlutterAssetsTask)
+                }
+            }
+            if (appProject2 != null) {
+                appProject2.afterEvaluate {
+                    assert appProject2.android != null
+                    appProject2.android.applicationVariants.all { appProjectVariant ->
+                        if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                            return
+                        }
+                        Task mergeAssets = project
+                                .tasks
+                                .findByPath(":appDriver:merge${appProjectVariant.name.capitalize()}Assets")
+                        assert mergeAssets
+                        mergeAssets.dependsOn(copyFlutterAssetsTask)
+                    }
+                }
+            }
+            if (appProject3 != null && appProject == null && appProject2 == null) {
+                appProject3.afterEvaluate {
+                    if (appProject3.android != null) {
+                        appProject3.android.applicationVariants.all { appProjectVariant ->
+                            if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                                return
+                            }
+                            Task mergeAssets = project
+                                    .tasks
+                                    .findByPath(":app:merge${appProjectVariant.name.capitalize()}Assets")
+                            assert mergeAssets
+                            mergeAssets.dependsOn(copyFlutterAssetsTask)
+                        }
+                    }
                 }
             }
         }
