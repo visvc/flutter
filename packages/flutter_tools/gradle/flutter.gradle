@@ -507,6 +507,8 @@ class FlutterPlugin implements Plugin<Project> {
     }
 
     private void addCompileOnlyDependency(Project project, String variantName, Object dependency, Closure config = null) {
+        println ">>>>>>> addCompileOnlyDependency( ${project.name} ), variantName = $variantName, dependency = $dependency, config = $config"
+
         if (project.state.failure) {
             return
         }
@@ -520,6 +522,8 @@ class FlutterPlugin implements Plugin<Project> {
     }
 
     private static void addApiDependencies(Project project, String variantName, Object dependency, Closure config = null) {
+        println ">>>>>>> addApiDependencies( ${project.name} ), variantName = $variantName, dependency = $dependency, config = $config"
+
         String configuration;
         // `compile` dependencies are now `api` dependencies.
         if (project.getConfigurations().findByName("api")) {
@@ -676,76 +680,32 @@ class FlutterPlugin implements Plugin<Project> {
                 processResources.dependsOn(copyFlutterAssetsTask)
                 return
             }
-            // Flutter module included as a subproject in add to app.
-            Project appProject = project.rootProject.findProject(':appClient')
-            Project appProject2 = project.rootProject.findProject(':appDriver')
-            Project appProject3 = project.rootProject.findProject(':app')
 
-            assert (appProject != null || appProject2 != null || appProject3 != null)
+            Project featureNumbersGame = project
+                    .rootProject.findProject(':featureNumbersGame')
 
-            if (appProject != null) {
-                appProject.afterEvaluate {
-                    assert appProject.android != null
-                    appProject.android.applicationVariants.all { appProjectVariant ->
-                        // Find a compatible application variant in the host app.
-                        //
-                        // For example, consider a host app that defines the following variants:
-                        // | ----------------- | ----------------------------- |
-                        // |   Build Variant   |   Flutter Equivalent Variant  |
-                        // | ----------------- | ----------------------------- |
-                        // |   freeRelease     |   relese                      |
-                        // |   freeDebug       |   debug                       |
-                        // |   freeDevelop     |   debug                       |
-                        // |   profile         |   profile                     |
-                        // | ----------------- | ----------------------------- |
-                        //
-                        // This mapping is based on the following rules:
-                        // 1. If the host app build variant name is `profile` then the equivalent
-                        //    Flutter variant is `profile`.
-                        // 2. If the host app build variant is debuggable
-                        //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
-                        //    variant is `debug`.
-                        // 3. Otherwise, the equivalent Flutter variant is `release`.
-                        if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                            return
-                        }
-                        Task mergeAssets = project
-                                .tasks
-                                .findByPath(":appClient:merge${appProjectVariant.name.capitalize()}Assets")
-                        assert mergeAssets
-                        mergeAssets.dependsOn(copyFlutterAssetsTask)
-                    }
-                }
-            }
-            if (appProject2 != null) {
-                appProject2.afterEvaluate {
-                    assert appProject2.android != null
-                    appProject2.android.applicationVariants.all { appProjectVariant ->
-                        if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                            return
-                        }
-                        Task mergeAssets = project
-                                .tasks
-                                .findByPath(":appDriver:merge${appProjectVariant.name.capitalize()}Assets")
-                        assert mergeAssets
-                        mergeAssets.dependsOn(copyFlutterAssetsTask)
-                    }
-                }
-            }
-            if (appProject3 != null && appProject == null && appProject2 == null) {
-                appProject3.afterEvaluate {
-                    if (appProject3.android != null) {
-                        appProject3.android.applicationVariants.all { appProjectVariant ->
-                            if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                                return
-                            }
-                            Task mergeAssets = project
-                                    .tasks
-                                    .findByPath(":app:merge${appProjectVariant.name.capitalize()}Assets")
-                            assert mergeAssets
-                            mergeAssets.dependsOn(copyFlutterAssetsTask)
-                        }
-                    }
+            if (featureNumbersGame != null) {
+                addFlutterTo(featureNumbersGame,
+                        variantBuildMode, copyFlutterAssetsTask)
+            } else {
+                Project appClient = project
+                        .rootProject.findProject(':appClient')
+
+                Project appDriver = project
+                        .rootProject.findProject(':appDriver')
+
+                if (appClient != null && appDriver != null) {
+                    addFlutterTo(project.rootProject
+                            .findProject(':appClient'),
+                            variantBuildMode, copyFlutterAssetsTask)
+
+                    addFlutterTo(project.rootProject
+                            .findProject(':appDriver'),
+                            variantBuildMode, copyFlutterAssetsTask)
+                } else {
+                    addFlutterTo(project.rootProject
+                            .findProject(':app'),
+                            variantBuildMode, copyFlutterAssetsTask)
                 }
             }
         }
@@ -755,6 +715,32 @@ class FlutterPlugin implements Plugin<Project> {
             project.android.libraryVariants.all addFlutterDeps
         }
         configurePlugins()
+    }
+
+    private void addFlutterTo(Project project, String variantBuildMode, Task copyFlutterAssetsTask) {
+        if (project == null) return
+        println ">>>>>>> addFlutterTo( ${project.name} ), variantBuildMode = $variantBuildMode"
+
+        project.afterEvaluate {
+            println ">>>>>>> project.android = ${project.android}, variantBuildMode = $variantBuildMode"
+
+            try {
+                if (project.android != null) {
+                    project.android.applicationVariants.all { appProjectVariant ->
+                        if (buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                            return
+                        }
+                        Task mergeAssets = project
+                                .tasks
+                                .findByPath(":${project.name}:merge${appProjectVariant.name.capitalize()}Assets")
+                        assert mergeAssets
+                        mergeAssets.dependsOn(copyFlutterAssetsTask)
+                    }
+                }
+            } catch (Throwable error) {
+                error.printStackTrace()
+            }
+        }
     }
 }
 
